@@ -1,7 +1,11 @@
 ﻿using HtmlAgilityPack;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace MainLogic
@@ -48,21 +52,83 @@ namespace MainLogic
             }
         }
 
-        public static string ModifyHtmlContent(string content)
+        public static string ModifyHtmlContent(string content, string url)
         {
             try
             {
                 HtmlDocument sourceHtmlDoc = new HtmlDocument();
                 sourceHtmlDoc.LoadHtml(content);
 
-                sourceHtmlDoc.DocumentNode.SelectNodes("//");
+                IEnumerable<HtmlNode> nodesToModify =
+                    sourceHtmlDoc.DocumentNode.SelectNodes("//link")
+                        .Concat(sourceHtmlDoc.DocumentNode.SelectNodes("//a"))
+                        .Concat(sourceHtmlDoc.DocumentNode.SelectNodes("//script"));
 
+                foreach (HtmlNode htmlNode in nodesToModify)
+                {
+                    try
+                    {
+                        CheckAndReplaceLink(htmlNode, url);
+                    }
+                    catch (Exception ex)
+                    {
+
+                    }
+                }
 
                 return string.Empty;
             }
             catch (Exception ex)
             {
                 throw new Exception($"Html parsing error: {ex.Message}");
+            }
+        }
+
+        private static void CheckAndReplaceLink(HtmlNode htmlNode, string destinationUrl)
+        {
+            UriBuilder destinationUrlBuilder = new UriBuilder(destinationUrl);
+
+            HtmlAttributeCollection attributes = htmlNode.Attributes;
+
+            IEnumerable<HtmlAttribute> allAttributes =
+                attributes.AttributesWithName("src")
+                    .Concat(attributes.AttributesWithName("href"));
+
+            foreach (HtmlAttribute attribute in allAttributes)
+            {
+                if (!string.IsNullOrWhiteSpace(attribute.Value) && !attribute.Value.StartsWith("#"))
+                {
+                    UriBuilder srcUrlBuilder;
+
+                    if (attribute.Value.StartsWith("//"))
+                    {
+                        Regex sourceRegex = new Regex(Regex.Escape("//"));
+                        attribute.Value = sourceRegex.Replace(attribute.Value, $"{destinationUrlBuilder.Scheme}://", 1);
+                    }
+
+                    if (attribute.Value.StartsWith("/"))
+                    {
+                        Regex sourceRegex = new Regex(Regex.Escape("/"));
+                        string replace = $"{destinationUrlBuilder.Scheme}://{destinationUrlBuilder.Host}/";
+                        attribute.Value = sourceRegex.Replace(attribute.Value, replace, 1);
+                        return;
+                    }
+                    
+                    Uri srcUrl = new Uri(attribute.Value);
+
+                    if (srcUrl.Host == null || srcUrl.Scheme == null)
+                    {
+                        throw new Exception();
+                    }
+                    srcUrlBuilder = new UriBuilder(srcUrl);
+
+                    if (srcUrlBuilder.Scheme != destinationUrlBuilder.Scheme)
+                    {
+                        srcUrlBuilder.Scheme = destinationUrlBuilder.Scheme;
+                    }
+
+                    attribute.Value = srcUrlBuilder.ToString();
+                }
             }
         }
     }

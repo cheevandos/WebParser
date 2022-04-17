@@ -34,11 +34,13 @@ namespace WebParser
 
                 string webPageContent = getContentTask.Result;
 
+                string modifiedWebPageContent = Parser.ModifyHtmlContent(webPageContent, url);
+
                 DialogResult saveFileDialogResult = saveContentDialog.ShowDialog();
 
                 if (saveFileDialogResult == DialogResult.OK)
                 {
-                    FileHelper.SaveFileFromString(webPageContent, saveContentDialog.FileName);
+                    FileHelper.SaveFileFromString(modifiedWebPageContent, saveContentDialog.FileName);
 
                     ShowInfoMessage($"File saved: {saveContentDialog.FileName}");
                 }
